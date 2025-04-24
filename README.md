@@ -29,7 +29,7 @@ This tool allows you to check if phone numbers are registered with Amazon accoun
 ### Usage
 1. Run the main script:
    ```
-   python gencheck.py
+   python main.py
    ```
 2. Choose an option from the menu:
    - Option 1: Generate valid phone numbers
@@ -70,7 +70,7 @@ Cet outil permet de vérifier si des numéros de téléphone sont enregistrés a
 ### Utilisation
 1. Exécutez le script principal :
    ```
-   python gencheck.py
+   python main.py
    ```
 2. Choisissez une option dans le menu :
    - Option 1 : Générer des numéros de téléphone valides
