@@ -332,6 +332,13 @@ def watch_file(file_path, max_check_time=None, batch_size=100):
     print(f"Surveillance du fichier: {file_path}")
     print(f"Temps max de vérification: {max_check_time if max_check_time else 'illimité'} secondes")
     
+    # Vérifier si le fichier existe avant de commencer la surveillance
+    if not os.path.exists(file_path):
+        print(f"Erreur : le fichier '{file_path}' n'existe pas.")
+        return
+    
+    last_modified_time = os.path.getmtime(file_path)
+    
     while True:
         # Vérifier si le temps maximum est dépassé
         if max_check_time and time.time() - start_time > max_check_time:
@@ -339,8 +346,19 @@ def watch_file(file_path, max_check_time=None, batch_size=100):
             break
             
         try:
+            # Vérifier si le fichier a été modifié depuis la dernière vérification
+            current_modified_time = os.path.getmtime(file_path)
+            if current_modified_time <= last_modified_time and len(checked_numbers) > 0:
+                # Fichier non modifié, attendre avant la prochaine vérification
+                time.sleep(0.5)
+                continue
+                
+            # Mettre à jour le temps de dernière modification
+            last_modified_time = current_modified_time
+            
             with open(file_path, "r") as file:
                 lines = file.readlines()
+                
             # Supprimer les doublons en conservant l'ordre
             unique_lines = list(dict.fromkeys([line.strip() for line in lines if line.strip()]))
             if len(unique_lines) != len(lines):
@@ -348,6 +366,8 @@ def watch_file(file_path, max_check_time=None, batch_size=100):
                 with open(file_path, "w") as file:
                     for line in unique_lines:
                         file.write(line + "\n")
+                # Mettre à jour le temps de dernière modification après l'écriture
+                last_modified_time = os.path.getmtime(file_path)
                         
             # Filtrer les numéros non encore vérifiés
             new_numbers = [num for num in unique_lines if num not in checked_numbers]
@@ -369,7 +389,14 @@ def watch_file(file_path, max_check_time=None, batch_size=100):
             else:
                 print("Aucun nouveau numéro détecté.")
         except FileNotFoundError:
-            print(f"Erreur : le fichier '{file_path}' n'existe pas.")
+            print(f"Erreur : le fichier '{file_path}' n'existe pas. Nouvelle tentative dans 5 secondes...")
+            time.sleep(5)  # Attendre plus longtemps en cas d'erreur
+            continue
+        except Exception as e:
+            logging.error(f"Erreur lors de la surveillance du fichier: {str(e)}", exc_info=True)
+            print(f"Erreur lors de la surveillance: {str(e)}. Nouvelle tentative dans 5 secondes...")
+            time.sleep(5)  # Attendre plus longtemps en cas d'erreur
+            continue
             
         # Pause plus courte pour être plus réactif
         time.sleep(0.5)
