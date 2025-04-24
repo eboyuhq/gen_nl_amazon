@@ -72,16 +72,27 @@ def load_proxies(file_path):
     return proxies
 
 def validate_proxy(proxy):
-    proxies = {"http": proxy, "https": proxy}
+    # Création du dictionnaire de proxies en séparant http et https
+    proxy_type = "http" if proxy.startswith("http://") else "https"
+    proxies = {proxy_type: proxy}
+    
+    # Utiliser un timeout court pour accélérer la vérification
+    timeout = 5
+    
+    # Utiliser une seule URL de test fiable
+    test_url = "http://httpbin.org/ip" if proxy_type == "http" else "https://httpbin.org/ip"
+    
     try:
-        response = requests.get("https://httpbin.org/ip", proxies=proxies, timeout=5, verify=False)
+        response = requests.get(test_url, proxies=proxies, timeout=timeout, verify=False)
         if response.status_code == 200:
-            # Vérification basée sur la présence de l'adresse IP retournée
-            data = response.json()
-            if data.get("origin"):
-                return True
+            return True
+    except (requests.exceptions.ConnectTimeout, requests.exceptions.ProxyError, requests.exceptions.ReadTimeout):
+        # Échec immédiat pour les erreurs de connexion courantes
+        pass
     except Exception as e:
-        logging.error("Erreur lors de la validation du proxy", exc_info=True)
+        # Journaliser l'erreur sans stack trace complète pour réduire la taille du log
+        logging.error(f"Erreur proxy {proxy}: {str(e)}")
+    
     return False
 
 # Chargement et validation concurrente des proxies
@@ -89,18 +100,36 @@ proxy_list = load_proxies("proxies.txt")
 if proxy_list:
     print(f"{len(proxy_list)} proxies loaded")
     valid_proxies = []
-    with ThreadPoolExecutor(max_workers=20) as executor:
+    # Augmenter le nombre de workers et limiter le temps total de validation
+    max_workers = min(50, os.cpu_count() * 4)  # Plus de workers pour accélérer
+    validation_timeout = 30  # Limiter le temps total de validation à 30 secondes
+    
+    start_time = time.time()
+    with ThreadPoolExecutor(max_workers=max_workers) as executor:
+        # Soumettre tous les proxies pour validation
         future_to_proxy = {executor.submit(validate_proxy, p): p for p in proxy_list}
+        
+        # Traiter les résultats au fur et à mesure qu'ils arrivent
         for future in as_completed(future_to_proxy):
             p = future_to_proxy[future]
+            # Vérifier si le temps de validation total est dépassé
+            if time.time() - start_time > validation_timeout:
+                print(f"Validation timeout après {validation_timeout} secondes")
+                # Annuler les futures restants
+                for f in future_to_proxy:
+                    if not f.done():
+                        f.cancel()
+                break
+                
             try:
                 if future.result():
                     valid_proxies.append(p)
-            except Exception as e:
-                logging.error("Erreur lors de la validation d'un proxy", exc_info=True)
+            except Exception:
+                # Ne pas logger les erreurs individuelles pour éviter de surcharger le log
                 pass
+    
     proxy_list = valid_proxies
-    print(f"{len(proxy_list)} proxies valid after filtering")
+    print(f"{len(proxy_list)} proxies valid after filtering en {time.time() - start_time:.2f} secondes")
 else:
     print("Aucun proxy chargé. avant ratelimit (100k max)")
 
@@ -246,9 +275,11 @@ def fun_action(num):
     if proxy_list:
         chosen_proxy = random.choice(proxy_list)
         proxies = {"http": chosen_proxy, "https": chosen_proxy}
-        print(f"Using proxy: {chosen_proxy}")
+        # Réduire les logs pour accélérer l'exécution
+        # print(f"Using proxy: {chosen_proxy}")
     try:
-        res = requests.post(amazon.url, headers=amazon.headers, cookies=amazon.cookies, data=amazon.data, verify=False, proxies=proxies, timeout=10).text
+        # Réduire le timeout pour accélérer la vérification
+        res = requests.post(amazon.url, headers=amazon.headers, cookies=amazon.cookies, data=amazon.data, verify=False, proxies=proxies, timeout=5).text
         # Détermine le fichier de sortie selon le préfixe
         if num.startswith("+590") or num.startswith("+594") or num.startswith("+596") or num.startswith("+262"):
             output_file = "CheckedNL_domtom.txt"
@@ -281,11 +312,25 @@ def fun_action(num):
         print(f"Error for {num}: {e}")
         return False
 
-def watch_file(file_path):
-    """Surveille le fichier pour détecter de nouveaux numéros toutes les secondes et supprime les doublons."""
+def watch_file(file_path, max_check_time=None, batch_size=100):
+    """Surveille le fichier pour détecter de nouveaux numéros et supprime les doublons.
+    
+    Args:
+        file_path: Chemin du fichier à surveiller
+        max_check_time: Temps maximum de vérification en secondes (None = illimité)
+        batch_size: Nombre de numéros à vérifier par lot
+    """
     checked_numbers = set()
-    print(f"Surveillance continue du fichier: {file_path}")
+    start_time = time.time()
+    print(f"Surveillance du fichier: {file_path}")
+    print(f"Temps max de vérification: {max_check_time if max_check_time else 'illimité'} secondes")
+    
     while True:
+        # Vérifier si le temps maximum est dépassé
+        if max_check_time and time.time() - start_time > max_check_time:
+            print(f"Temps maximum de vérification ({max_check_time}s) atteint. Arrêt.")
+            break
+            
         try:
             with open(file_path, "r") as file:
                 lines = file.readlines()
@@ -296,18 +341,31 @@ def watch_file(file_path):
                 with open(file_path, "w") as file:
                     for line in unique_lines:
                         file.write(line + "\n")
+                        
             # Filtrer les numéros non encore vérifiés
             new_numbers = [num for num in unique_lines if num not in checked_numbers]
             if new_numbers:
-                print(f"{len(new_numbers)} nouveau(x) numéro(s) détecté(s).")
-                with Pool(processes=os.cpu_count() * 4) as pool:
-                    results = pool.map(fun_action, new_numbers)
-                checked_numbers.update(new_numbers)
+                # Traiter par lots pour éviter de bloquer trop longtemps
+                for i in range(0, len(new_numbers), batch_size):
+                    batch = new_numbers[i:i+batch_size]
+                    print(f"Vérification du lot {i//batch_size+1}: {len(batch)} numéro(s)")
+                    
+                    with Pool(processes=min(os.cpu_count() * 2, 8)) as pool:
+                        results = pool.map(fun_action, batch)
+                    
+                    checked_numbers.update(batch)
+                    
+                    # Vérifier à nouveau le temps après chaque lot
+                    if max_check_time and time.time() - start_time > max_check_time:
+                        print(f"Temps maximum de vérification ({max_check_time}s) atteint. Arrêt.")
+                        return
             else:
                 print("Aucun nouveau numéro détecté.")
         except FileNotFoundError:
             print(f"Erreur : le fichier '{file_path}' n'existe pas.")
-        time.sleep(1)
+            
+        # Pause plus courte pour être plus réactif
+        time.sleep(0.5)
 
 def main():
     choice = input("@hasbateur2cc > ")
@@ -381,8 +439,12 @@ def main():
             print("Le numéro n'est pas validé.")
     
     elif choice == "3":
-        file_path = input("Fichier à vérifier (surveillance continue): ")
-        watch_file(file_path)
+        file_path = input("Fichier à vérifier: ")
+        max_time = input("Temps maximum de vérification en secondes (laisser vide pour illimité): ")
+        max_time = int(max_time) if max_time.strip() else None
+        batch_size = input("Nombre de numéros à vérifier par lot (défaut: 100): ")
+        batch_size = int(batch_size) if batch_size.strip() else 100
+        watch_file(file_path, max_time, batch_size)
     
     else:
         print("Choix invalide")
