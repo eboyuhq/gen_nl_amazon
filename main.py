@@ -297,7 +297,7 @@ def gen_candidate_batch(prefix, region, batch_size=10000):
             batch_set.add(candidate)
     return list(batch_set)
 
-def fun_action(num):
+def fun_action(num, region=None):
     num = num.strip()
     if num.isnumeric() and "+" not in num:
         num = f"+{num}"
@@ -358,13 +358,14 @@ def fun_action(num):
         print(f"Error for {num}: {e}")
         return False
 
-def watch_file(file_path, max_check_time=None, batch_size=100):
+def watch_file(file_path, max_check_time=None, batch_size=100, region=None):
     """Surveille le fichier pour détecter de nouveaux numéros et supprime les doublons.
     
     Args:
         file_path: Chemin du fichier à surveiller
         max_check_time: Temps maximum de vérification en secondes (None = illimité)
         batch_size: Nombre de numéros à vérifier par lot
+        region: Code de région pour la vérification des numéros
     """
     checked_numbers = set()
     start_time = time.time()
@@ -417,7 +418,10 @@ def watch_file(file_path, max_check_time=None, batch_size=100):
                     print(f"Vérification du lot {i//batch_size+1}: {len(batch)} numéro(s)")
                     
                     with Pool(processes=min(os.cpu_count() * 2, 8)) as pool:
-                        results = pool.map(fun_action, batch)
+                        # Utiliser une fonction partielle pour passer la région
+                        from functools import partial
+                        fun_action_with_region = partial(fun_action, region=region)
+                        results = pool.map(fun_action_with_region, batch)
                     
                     checked_numbers.update(batch)
                     
@@ -517,7 +521,10 @@ def main():
             batch = gen_candidate_batch(prefix, region, batch_size)
             print("Vérification du batch...")
             with Pool(processes=os.cpu_count() * 4) as pool:
-                for result in pool.imap_unordered(fun_action, batch):
+                # Créer une fonction partielle pour passer la région
+                from functools import partial
+                fun_action_with_region = partial(fun_action, region=region)
+                for result in pool.imap_unordered(fun_action_with_region, batch):
                     total_attempts += 1
                     if result:
                         valid_count += 1
@@ -529,7 +536,32 @@ def main():
     
     elif choice == "2":
         phone_number = input("Entrez le numéro à vérifier : ")
-        result = fun_action(phone_number)
+        # Déterminer la région en fonction du préfixe du numéro
+        phone_region = None
+        if phone_number.startswith("+590"):
+            phone_region = "GP"  # Par défaut Guadeloupe
+        elif phone_number.startswith("+594"):
+            phone_region = "GF"  # Guyane
+        elif phone_number.startswith("+596"):
+            phone_region = "MQ"  # Martinique
+        elif phone_number.startswith("+262"):
+            phone_region = "RE"  # Par défaut Réunion
+        elif phone_number.startswith("+32"):
+            phone_region = "BE"  # Belgique
+        elif phone_number.startswith("+33"):
+            phone_region = "FR"  # France
+        elif phone_number.startswith("+27"):
+            phone_region = "ZA"  # Afrique du Sud
+        elif phone_number.startswith("+34"):
+            phone_region = "ES"  # Espagne
+        elif phone_number.startswith("+351"):
+            phone_region = "PT"  # Portugal
+        elif phone_number.startswith("+49"):
+            phone_region = "DE"  # Allemagne
+        elif phone_number.startswith("+41"):
+            phone_region = "CH"  # Suisse
+            
+        result = fun_action(phone_number, phone_region)
         if result:
             print("Le numéro est validé.")
         else:
@@ -541,7 +573,57 @@ def main():
         max_time = int(max_time) if max_time.strip() else None
         batch_size = input("Nombre de numéros à vérifier par lot (défaut: 100): ")
         batch_size = int(batch_size) if batch_size.strip() else 100
-        watch_file(file_path, max_time, batch_size)
+        # Demander la région pour la vérification
+        print("\nChoisissez la région pour la vérification:")
+        print("[1] Guadeloupe")
+        print("[2] Guyane")
+        print("[3] Martinique")
+        print("[4] Réunion")
+        print("[5] Mayotte")
+        print("[6] Saint-Martin")
+        print("[7] Saint-Barthélemy")
+        print("[8] Belgique")
+        print("[9] France")
+        print("[10] Afrique du Sud")
+        print("[11] Espagne")
+        print("[12] Portugal")
+        print("[13] Allemagne")
+        print("[14] Suisse")
+        print("[0] Auto-détection (par défaut)")
+        
+        region_choice = input("Votre choix (0-14): ")
+        file_region = None
+        
+        if region_choice == "1":
+            file_region = "GP"
+        elif region_choice == "2":
+            file_region = "GF"
+        elif region_choice == "3":
+            file_region = "MQ"
+        elif region_choice == "4":
+            file_region = "RE"
+        elif region_choice == "5":
+            file_region = "YT"
+        elif region_choice == "6":
+            file_region = "MF"
+        elif region_choice == "7":
+            file_region = "BL"
+        elif region_choice == "8":
+            file_region = "BE"
+        elif region_choice == "9":
+            file_region = "FR"
+        elif region_choice == "10":
+            file_region = "ZA"
+        elif region_choice == "11":
+            file_region = "ES"
+        elif region_choice == "12":
+            file_region = "PT"
+        elif region_choice == "13":
+            file_region = "DE"
+        elif region_choice == "14":
+            file_region = "CH"
+        
+        watch_file(file_path, max_time, batch_size, file_region)
     
     else:
         print("Choix invalide")
