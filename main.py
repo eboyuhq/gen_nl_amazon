@@ -182,21 +182,33 @@ class Amazon:
 
 def genph(nb, prefix, region):
     numbers = []
-    # Pour DOM TOM, si prefix est une liste, définir la configuration des préfixes
-    if isinstance(prefix, list):
-        domtom_config = {
-            "+590": {"region": "GP", "pattern": "690"},
-            "+594": {"region": "GF", "pattern": "694"},
-            "+596": {"region": "MQ", "pattern": "696"},
-            "+262": {"region": "RE", "pattern": "692"}
+    # Configuration des préfixes pour les territoires d'outre-mer
+    domtom_config = {
+        "+590": {
+            "GP": {"pattern": "690"},  # Guadeloupe
+            "MF": {"pattern": "690"},  # Saint-Martin
+            "BL": {"pattern": "690"}   # Saint-Barthélemy
+        },
+        "+594": {"GF": {"pattern": "694"}},  # Guyane Française
+        "+596": {"MQ": {"pattern": "696"}},  # Martinique
+        "+262": {
+            "RE": {"pattern": "692"},  # Réunion
+            "YT": {"pattern": "639"}   # Mayotte
         }
+    }
     while len(numbers) < nb:
-        if isinstance(prefix, list):
-            chosen_prefix = random.choice(prefix)
-            conf = domtom_config.get(chosen_prefix, {"region": "GP", "pattern": "690"})
-            reg = conf["region"]
-            pattern = conf["pattern"]
-            candidate = f"{chosen_prefix}{pattern}{random.randint(0, 999999):06d}"
+        # Gestion des territoires d'outre-mer avec leurs préfixes spécifiques
+        if prefix in ["+590", "+594", "+596", "+262"]:
+            if prefix in domtom_config:
+                # Si la région est spécifiée, utiliser sa configuration
+                if region and region in domtom_config[prefix]:
+                    reg = region
+                    pattern = domtom_config[prefix][region]["pattern"]
+                # Sinon utiliser la première configuration disponible
+                else:
+                    reg = list(domtom_config[prefix].keys())[0]
+                    pattern = domtom_config[prefix][reg]["pattern"]
+                candidate = f"{prefix}{pattern}{random.randint(0, 999999):06d}"
         else:
             chosen_prefix = prefix
             reg = region
@@ -226,18 +238,33 @@ def genph(nb, prefix, region):
 
 # Fonction pour générer UN candidat
 def gen_candidate(prefix, region):
-    if isinstance(prefix, list):
-        domtom_config = {
-            "+590": {"region": "GP", "pattern": "690"},
-            "+594": {"region": "GF", "pattern": "694"},
-            "+596": {"region": "MQ", "pattern": "696"},
-            "+262": {"region": "RE", "pattern": "692"}
+    # Configuration des préfixes pour les territoires d'outre-mer
+    domtom_config = {
+        "+590": {
+            "GP": {"pattern": "690"},  # Guadeloupe
+            "MF": {"pattern": "690"},  # Saint-Martin
+            "BL": {"pattern": "690"}   # Saint-Barthélemy
+        },
+        "+594": {"GF": {"pattern": "694"}},  # Guyane Française
+        "+596": {"MQ": {"pattern": "696"}},  # Martinique
+        "+262": {
+            "RE": {"pattern": "692"},  # Réunion
+            "YT": {"pattern": "639"}   # Mayotte
         }
-        chosen_prefix = random.choice(prefix)
-        conf = domtom_config.get(chosen_prefix, {"region": "GP", "pattern": "690"})
-        reg = conf["region"]
-        pattern = conf["pattern"]
-        candidate = f"{chosen_prefix}{pattern}{random.randint(0, 999999):06d}"
+    }
+    
+    # Gestion des territoires d'outre-mer avec leurs préfixes spécifiques
+    if prefix in ["+590", "+594", "+596", "+262"]:
+        if prefix in domtom_config:
+            # Si la région est spécifiée, utiliser sa configuration
+            if region and region in domtom_config[prefix]:
+                reg = region
+                pattern = domtom_config[prefix][region]["pattern"]
+            # Sinon utiliser la première configuration disponible
+            else:
+                reg = list(domtom_config[prefix].keys())[0]
+                pattern = domtom_config[prefix][reg]["pattern"]
+            candidate = f"{prefix}{pattern}{random.randint(0, 999999):06d}"
     else:
         chosen_prefix = prefix
         reg = region
@@ -288,8 +315,20 @@ def fun_action(num):
         # Réduire le timeout pour accélérer la vérification
         res = requests.post(amazon.url, headers=amazon.headers, cookies=amazon.cookies, data=amazon.data, verify=False, proxies=proxies, timeout=5).text
         # Détermine le fichier de sortie selon le préfixe
-        if num.startswith("+590") or num.startswith("+594") or num.startswith("+596") or num.startswith("+262"):
-            output_file = "CheckedNL_domtom.txt"
+        if num.startswith("+590") and (region == "GP" or not region):
+            output_file = "CheckedNL_guadeloupe.txt"
+        elif num.startswith("+590") and region == "MF":
+            output_file = "CheckedNL_saint_martin.txt"
+        elif num.startswith("+590") and region == "BL":
+            output_file = "CheckedNL_saint_barthelemy.txt"
+        elif num.startswith("+594"):
+            output_file = "CheckedNL_guyane.txt"
+        elif num.startswith("+596"):
+            output_file = "CheckedNL_martinique.txt"
+        elif num.startswith("+262") and (region == "RE" or not region):
+            output_file = "CheckedNL_reunion.txt"
+        elif num.startswith("+262") and region == "YT":
+            output_file = "CheckedNL_mayotte.txt"
         elif num.startswith("+32"):
             output_file = "CheckedNL_belgique.txt"
         elif num.startswith("+33"):
@@ -406,37 +445,61 @@ def main():
     
     if choice == "1":
         print("Choisissez le pays pour la génération des numéros :")
-        print("[1] Dom Tom")
-        print("[2] Belgique")
-        print("[3] France")
-        print("[4] Afrique du Sud")
-        print("[5] Espagne")
-        print("[6] Portugal")
-        print("[7] Allemagne")
-        print("[8] Suisse")
+        print("[1] Guadeloupe")
+        print("[2] Guyane Française")
+        print("[3] Martinique")
+        print("[4] Réunion")
+        print("[5] Mayotte")
+        print("[6] Saint-Martin")
+        print("[7] Saint-Barthélemy")
+        print("[8] Belgique")
+        print("[9] France")
+        print("[10] Afrique du Sud")
+        print("[11] Espagne")
+        print("[12] Portugal")
+        print("[13] Allemagne")
+        print("[14] Suisse")
         country_choice = input("Votre choix : ")
         if country_choice == "1":
-            prefix = ["+590", "+594", "+596", "+262"]
-            region = None
+            prefix = "+590"
+            region = "GP"
         elif country_choice == "2":
+            prefix = "+594"
+            region = "GF"
+        elif country_choice == "3":
+            prefix = "+596"
+            region = "MQ"
+        elif country_choice == "4":
+            prefix = "+262"
+            region = "RE"
+        elif country_choice == "5":
+            prefix = "+262"
+            region = "YT"
+        elif country_choice == "6":
+            prefix = "+590"
+            region = "MF"
+        elif country_choice == "7":
+            prefix = "+590"
+            region = "BL"
+        elif country_choice == "8":
             prefix = "+32"
             region = "BE"
-        elif country_choice == "3":
+        elif country_choice == "9":
             prefix = "+33"
             region = "FR"
-        elif country_choice == "4":
+        elif country_choice == "10":
             prefix = "+27"
             region = "ZA"
-        elif country_choice == "5":
+        elif country_choice == "11":
             prefix = "+34"
             region = "ES"
-        elif country_choice == "6":
+        elif country_choice == "12":
             prefix = "+351"
             region = "PT"
-        elif country_choice == "7":
+        elif country_choice == "13":
             prefix = "+49"
             region = "DE"
-        elif country_choice == "8":
+        elif country_choice == "14":
             prefix = "+41"
             region = "CH"
         else:
