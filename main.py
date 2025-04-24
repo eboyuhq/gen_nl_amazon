@@ -85,6 +85,8 @@ def validate_proxy(proxy):
     try:
         response = requests.get(test_url, proxies=proxies, timeout=timeout, verify=False)
         if response.status_code == 200:
+            # Ajouter le proxy à la liste des proxies valides
+            valid_proxies.append(proxy)
             return True
     except (requests.exceptions.ConnectTimeout, requests.exceptions.ProxyError, requests.exceptions.ReadTimeout):
         # Échec immédiat pour les erreurs de connexion courantes
@@ -97,9 +99,10 @@ def validate_proxy(proxy):
 
 # Chargement et validation concurrente des proxies
 proxy_list = load_proxies("proxies.txt")
+valid_proxies = []  # Définir valid_proxies comme une variable globale
+
 if proxy_list:
     print(f"{len(proxy_list)} proxies loaded")
-    valid_proxies = []
     # Augmenter le nombre de workers et limiter le temps total de validation
     max_workers = min(50, os.cpu_count() * 4)  # Plus de workers pour accélérer
     validation_timeout = 30  # Limiter le temps total de validation à 30 secondes
@@ -128,10 +131,13 @@ if proxy_list:
                 # Ne pas logger les erreurs individuelles pour éviter de surcharger le log
                 pass
     
-    proxy_list = valid_proxies
-    print(f"{len(proxy_list)} proxies valid after filtering en {time.time() - start_time:.2f} secondes")
+    print(f"{len(valid_proxies)} proxies valid after filtering en {time.time() - start_time:.2f} secondes")
 else:
     print("Aucun proxy chargé. avant ratelimit (100k max)")
+
+# Si aucun proxy valide n'a été trouvé, afficher un avertissement
+if not valid_proxies:
+    print("ATTENTION: Aucun proxy valide n'a été trouvé. Les requêtes seront effectuées sans proxy.")
 
 class Amazon:
     def __init__(self, num):
@@ -272,8 +278,9 @@ def fun_action(num):
     amazon.data['email'] = num
 
     proxies = None
-    if proxy_list:
-        chosen_proxy = random.choice(proxy_list)
+    # S'assurer que nous n'utilisons que des proxies valides
+    if valid_proxies and len(valid_proxies) > 0:
+        chosen_proxy = random.choice(valid_proxies)
         proxies = {"http": chosen_proxy, "https": chosen_proxy}
         # Réduire les logs pour accélérer l'exécution
         # print(f"Using proxy: {chosen_proxy}")
