@@ -277,6 +277,8 @@ def gen_candidate(prefix, region):
         elif reg == "CH":
             # Format pour la Suisse: +41 7x xxx xx xx (mobiles)
             candidate = f"{chosen_prefix}7{random.randint(0, 9)}{random.randint(100000, 999999):06d}"
+        elif reg == "KE":  
+            candidate = f"{chosen_prefix}{random.choice(['7','1'])}{random.randint(10000000, 99999999):08d}"
         else:
             candidate = f"{chosen_prefix}{random.randint(600000000, 799999999):09d}"
     try:
@@ -344,7 +346,7 @@ def fun_action(num, region=None):
         elif num.startswith("+41"):
             output_file = "CheckedNL_suisse.txt"
         else:
-            output_file = "CheckedNL.txt"
+            output_file = "CheckedNL_kenya.txt"
         if "ap_change_login_claim" in res:
             with open(output_file, "a") as ff:
                 ff.write(f"{num}\n")
