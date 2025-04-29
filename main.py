@@ -345,6 +345,8 @@ def fun_action(num, region=None):
             output_file = "CheckedNL_allemagne.txt"
         elif num.startswith("+41"):
             output_file = "CheckedNL_suisse.txt"
+        elif num.startswith("+254"):
+            output_file = "CheckedNL_kenya.txt"
         else:
             output_file = "CheckedNL_kenya.txt"
         if "ap_change_login_claim" in res:
@@ -465,6 +467,7 @@ def main():
         print("[12] Portugal")
         print("[13] Allemagne")
         print("[14] Suisse")
+        print("[15] Kenya")
         country_choice = input("Votre choix : ")
         if country_choice == "1":
             prefix = "+590"
@@ -508,6 +511,9 @@ def main():
         elif country_choice == "14":
             prefix = "+41"
             region = "CH"
+        elif country_choice == "15":
+            prefix = "+254"
+            region = "KE"
         else:
             print("Choix invalide, utilisation de la France par défaut.")
             prefix = "+33"
@@ -591,6 +597,7 @@ def main():
         print("[12] Portugal")
         print("[13] Allemagne")
         print("[14] Suisse")
+        print("[15] Kenya")
         print("[0] Auto-détection (par défaut)")
         
         region_choice = input("Votre choix (0-14): ")
@@ -624,6 +631,8 @@ def main():
             file_region = "DE"
         elif region_choice == "14":
             file_region = "CH"
+        elif region_choice == "15":
+            file_region = "KE"
         
         watch_file(file_path, max_time, batch_size, file_region)
     
