@@ -241,68 +241,127 @@ def gen_candidate_batch(prefix, region, batch_size=10000):
             batch_set.add(candidate)
     return list(batch_set)
 
-def fun_action(num, region=None):
+def fun_action(num, region=None, max_retries=3, initial_timeout=5):
     num = num.strip()
     if num.isnumeric() and "+" not in num:
         num = f"+{num}"
     amazon = Amazon(num)
     amazon.data['email'] = num
 
-    proxies = None
-    # S'assurer que nous n'utilisons que des proxies valides
-    if valid_proxies and len(valid_proxies) > 0:
-        chosen_proxy = random.choice(valid_proxies)
-        proxies = {"http": chosen_proxy, "https": chosen_proxy}
-        # Réduire les logs pour accélérer l'exécution
-        # print(f"Using proxy: {chosen_proxy}")
-    try:
-        # Réduire le timeout pour accélérer la vérification
-        res = requests.post(amazon.url, headers=amazon.headers, cookies=amazon.cookies, data=amazon.data, verify=False, proxies=proxies, timeout=5).text
-        # Détermine le fichier de sortie selon le préfixe
-        if num.startswith("+590") and (region == "GP" or not region):
-            output_file = "CheckedNL_guadeloupe.txt"
-        elif num.startswith("+590") and region == "MF":
-            output_file = "CheckedNL_saint_martin.txt"
-        elif num.startswith("+590") and region == "BL":
-            output_file = "CheckedNL_saint_barthelemy.txt"
-        elif num.startswith("+594"):
-            output_file = "CheckedNL_guyane.txt"
-        elif num.startswith("+596"):
-            output_file = "CheckedNL_martinique.txt"
-        elif num.startswith("+262") and (region == "RE" or not region):
-            output_file = "CheckedNL_reunion.txt"
-        elif num.startswith("+262") and region == "YT":
-            output_file = "CheckedNL_mayotte.txt"
-        elif num.startswith("+32"):
-            output_file = "CheckedNL_belgique.txt"
-        elif num.startswith("+33"):
-            output_file = "CheckedNL_france.txt"
-        elif num.startswith("+27"):
-            output_file = "CheckedNL_afrique_du_sud.txt"
-        elif num.startswith("+34"):
-            output_file = "CheckedNL_espagne.txt"
-        elif num.startswith("+351"):
-            output_file = "CheckedNL_portugal.txt"
-        elif num.startswith("+49"):
-            output_file = "CheckedNL_allemagne.txt"
-        elif num.startswith("+41"):
-            output_file = "CheckedNL_suisse.txt"
-        elif num.startswith("+254"):
-            output_file = "CheckedNL_kenya.txt"
-        else:
-            output_file = "CheckedNL_kenya.txt"
-        if "ap_change_login_claim" in res:
-            with open(output_file, "a") as ff:
-                ff.write(f"{num}\n")
-            print(f"\033[32m[+]\033[0m | Method: {method} | {num} | MY")
-            return True
-        else:
-            print(f"\033[31m[-]\033[0m | Method: {method} | {num} | MY")
-            return False
-    except Exception as e:
-        logging.error(f"Erreur lors de la vérification du numéro {num}", exc_info=True)
-        print(f"Error for {num}: {e}")
-        return False
+    # Liste des proxies à éviter pour cette requête spécifique
+    bad_proxies = set()
+    
+    # Tentatives avec backoff exponentiel
+    for attempt in range(max_retries):
+        proxies = None
+        # S'assurer que nous n'utilisons que des proxies valides
+        if valid_proxies and len(valid_proxies) > 0:
+            # Filtrer les proxies problématiques pour cette requête
+            available_proxies = [p for p in valid_proxies if p not in bad_proxies]
+            
+            # Si aucun proxy disponible après filtrage, essayer sans proxy
+            if not available_proxies:
+                if attempt == max_retries - 1:  # Dernière tentative
+                    print(f"Aucun proxy disponible pour {num}, tentative sans proxy...")
+                    proxies = None
+                else:
+                    # Réinitialiser la liste des mauvais proxies pour réessayer
+                    bad_proxies = set()
+                    available_proxies = valid_proxies
+            
+            if available_proxies:
+                chosen_proxy = random.choice(available_proxies)
+                proxies = {"http": chosen_proxy, "https": chosen_proxy}
+        
+        # Augmenter le timeout à chaque tentative
+        current_timeout = initial_timeout * (1.5 ** attempt)
+        
+        try:
+            # Effectuer la requête avec le timeout ajusté
+            res = requests.post(amazon.url, headers=amazon.headers, cookies=amazon.cookies, 
+                               data=amazon.data, verify=False, proxies=proxies, 
+                               timeout=current_timeout).text
+            # Détermine le fichier de sortie selon le préfixe
+            if num.startswith("+590") and (region == "GP" or not region):
+                output_file = "CheckedNL_guadeloupe.txt"
+            elif num.startswith("+590") and region == "MF":
+                output_file = "CheckedNL_saint_martin.txt"
+            elif num.startswith("+590") and region == "BL":
+                output_file = "CheckedNL_saint_barthelemy.txt"
+            elif num.startswith("+594"):
+                output_file = "CheckedNL_guyane.txt"
+            elif num.startswith("+596"):
+                output_file = "CheckedNL_martinique.txt"
+            elif num.startswith("+262") and (region == "RE" or not region):
+                output_file = "CheckedNL_reunion.txt"
+            elif num.startswith("+262") and region == "YT":
+                output_file = "CheckedNL_mayotte.txt"
+            elif num.startswith("+32"):
+                output_file = "CheckedNL_belgique.txt"
+            elif num.startswith("+33"):
+                output_file = "CheckedNL_france.txt"
+            elif num.startswith("+27"):
+                output_file = "CheckedNL_afrique_du_sud.txt"
+            elif num.startswith("+34"):
+                output_file = "CheckedNL_espagne.txt"
+            elif num.startswith("+351"):
+                output_file = "CheckedNL_portugal.txt"
+            elif num.startswith("+49"):
+                output_file = "CheckedNL_allemagne.txt"
+            elif num.startswith("+41"):
+                output_file = "CheckedNL_suisse.txt"
+            elif num.startswith("+254"):
+                output_file = "CheckedNL_kenya.txt"
+            else:
+                output_file = "CheckedNL_kenya.txt"
+            if "ap_change_login_claim" in res:
+                with open(output_file, "a") as ff:
+                    ff.write(f"{num}\n")
+                print(f"\033[32m[+]\033[0m | Method: {method} | {num} | MY")
+                return True
+            else:
+                print(f"\033[31m[-]\033[0m | Method: {method} | {num} | MY")
+                return False
+                
+        except requests.exceptions.ProxyError as e:
+            # Marquer ce proxy comme problématique
+            if proxies and 'https' in proxies:
+                bad_proxies.add(proxies['https'])
+            logging.warning(f"Erreur de proxy pour {num}: {str(e)}")
+            print(f"Erreur de proxy pour {num}, nouvelle tentative...")
+            # Attendre avant la prochaine tentative (backoff exponentiel)
+            time.sleep(0.5 * (2 ** attempt))
+            continue
+            
+        except (requests.exceptions.ConnectTimeout, requests.exceptions.ReadTimeout) as e:
+            # Timeout - peut-être un proxy lent
+            if proxies and 'https' in proxies:
+                bad_proxies.add(proxies['https'])
+            logging.warning(f"Timeout pour {num}: {str(e)}")
+            print(f"Timeout pour {num}, nouvelle tentative...")
+            time.sleep(0.5 * (2 ** attempt))
+            continue
+            
+        except requests.exceptions.ConnectionError as e:
+            # Problème de connexion
+            if proxies and 'https' in proxies:
+                bad_proxies.add(proxies['https'])
+            logging.warning(f"Erreur de connexion pour {num}: {str(e)}")
+            print(f"Erreur de connexion pour {num}, nouvelle tentative...")
+            time.sleep(0.5 * (2 ** attempt))
+            continue
+            
+        except Exception as e:
+            # Autres erreurs
+            logging.error(f"Erreur lors de la vérification du numéro {num}", exc_info=True)
+            print(f"Error for {num}: {e}")
+            time.sleep(0.5 * (2 ** attempt))
+            continue
+    
+    # Si toutes les tentatives ont échoué
+    logging.error(f"Échec après {max_retries} tentatives pour {num}")
+    print(f"Échec après {max_retries} tentatives pour {num}")
+    return False
 
 def watch_file(file_path, max_check_time=None, batch_size=100, region=None):
     """Surveille le fichier pour détecter de nouveaux numéros et supprime les doublons.
