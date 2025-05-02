@@ -71,73 +71,15 @@ def load_proxies(file_path):
                 proxies.append(proxy)
     return proxies
 
-def validate_proxy(proxy):
-    # Création du dictionnaire de proxies en séparant http et https
-    proxy_type = "http" if proxy.startswith("http://") else "https"
-    proxies = {proxy_type: proxy}
-    
-    # Utiliser un timeout court pour accélérer la vérification
-    timeout = 5
-    
-    # Utiliser une seule URL de test fiable
-    test_url = "http://httpbin.org/ip" if proxy_type == "http" else "https://httpbin.org/ip"
-    
-    try:
-        response = requests.get(test_url, proxies=proxies, timeout=timeout, verify=False)
-        if response.status_code == 200:
-            # Ajouter le proxy à la liste des proxies valides
-            valid_proxies.append(proxy)
-            return True
-    except (requests.exceptions.ConnectTimeout, requests.exceptions.ProxyError, requests.exceptions.ReadTimeout):
-        # Échec immédiat pour les erreurs de connexion courantes
-        pass
-    except Exception as e:
-        # Journaliser l'erreur sans stack trace complète pour réduire la taille du log
-        logging.error(f"Erreur proxy {proxy}: {str(e)}")
-    
-    return False
-
-# Chargement et validation concurrente des proxies
+# Chargement des proxies sans validation
 proxy_list = load_proxies("proxies.txt")
-valid_proxies = []  # Définir valid_proxies comme une variable globale
+valid_proxies = proxy_list  # Tous les proxies sont considérés comme valides
 
 if proxy_list:
     print(f"{len(proxy_list)} proxies loaded")
-    # Augmenter le nombre de workers et limiter le temps total de validation
-    max_workers = min(50, os.cpu_count() * 4)  # Plus de workers pour accélérer
-    validation_timeout = 30  # Limiter le temps total de validation à 30 secondes
-    
-    start_time = time.time()
-    with ThreadPoolExecutor(max_workers=max_workers) as executor:
-        # Soumettre tous les proxies pour validation
-        future_to_proxy = {executor.submit(validate_proxy, p): p for p in proxy_list}
-        
-        # Traiter les résultats au fur et à mesure qu'ils arrivent
-        for future in as_completed(future_to_proxy):
-            p = future_to_proxy[future]
-            # Vérifier si le temps de validation total est dépassé
-            if time.time() - start_time > validation_timeout:
-                print(f"Validation timeout après {validation_timeout} secondes")
-                # Annuler les futures restants
-                for f in future_to_proxy:
-                    if not f.done():
-                        f.cancel()
-                break
-                
-            try:
-                if future.result():
-                    valid_proxies.append(p)
-            except Exception:
-                # Ne pas logger les erreurs individuelles pour éviter de surcharger le log
-                pass
-    
-    print(f"{len(valid_proxies)} proxies valid after filtering en {time.time() - start_time:.2f} secondes")
 else:
     print("Aucun proxy chargé. avant ratelimit (100k max)")
 
-# Si aucun proxy valide n'a été trouvé, afficher un avertissement
-if not valid_proxies:
-    print("ATTENTION: Aucun proxy valide n'a été trouvé. Les requêtes seront effectuées sans proxy.")
 
 class Amazon:
     def __init__(self, num):
